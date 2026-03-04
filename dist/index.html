@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VFXLAB — Image Effects Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/vfxlab/assets/main-hEFr4HEi.js"></script>
+  <link rel="stylesheet" crossorigin href="/vfxlab/assets/main-BFWbgUYG.css">
+</head>
+<body>
+
+<header>
+  <h1>VFXLAB</h1>
+  <div class="sub">Image Effects Studio</div>
+  <div class="hdr-actions">
+    <button class="btn btn-ghost" id="btn-undo" disabled title="Undo (Ctrl+Z)">↩ Undo</button>
+    <button class="btn btn-ghost" id="btn-redo" disabled title="Redo (Ctrl+Y)">↪ Redo</button>
+    <button class="btn btn-ghost" id="btn-reset">Reset All</button>
+    <button class="btn btn-ghost" id="btn-record" disabled>⏺ Record WebM</button>
+    <button class="btn btn-primary" id="btn-export" disabled>Export PNG</button>
+  </div>
+</header>
+
+<!-- LEFT -->
+<aside class="panel-left">
+  <div class="panel-section">
+    <div class="panel-label">Source Image</div>
+    <div id="dropzone">
+      <img id="thumb" alt="preview">
+      <div class="dz-icon">⬡</div>
+      <div class="dz-text">Drop image here<br>or click to upload</div>
+      <div class="dz-hint">PNG, JPG, GIF, WEBP</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*">
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">
+      <span>Active Effects</span>
+      <span id="effect-count" style="color:var(--accent)">0</span>
+    </div>
+    <div id="effect-list">
+      <div class="no-effects">No effects applied</div>
+    </div>
+  </div>
+
+  <div class="panel-section" style="flex:1">
+    <div class="panel-label">
+      <span>Presets</span>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-xs" id="btn-save-preset" title="Save current effects as preset">+ Save</button>
+        <button class="btn btn-ghost btn-xs" id="btn-export-preset" title="Export preset as JSON file">↓ JSON</button>
+        <button class="btn btn-ghost btn-xs" id="btn-paste-preset" title="Paste JSON preset">⌘ Paste</button>
+        <label class="btn btn-ghost btn-xs" title="Import preset from JSON file" style="cursor:pointer">
+          ↑ File<input type="file" id="import-preset-input" accept=".json" style="display:none">
+        </label>
+      </div>
+    </div>
+    <div id="preset-list">
+      <div class="no-effects">No saved presets</div>
+    </div>
+  </div>
+</aside>
+
+<!-- CENTER -->
+<main class="panel-center" id="main-center">
+  <div class="canvas-wrap" id="canvas-wrap" style="display:none">
+    <canvas id="preview"></canvas>
+  </div>
+  <div class="canvas-placeholder" id="placeholder">
+    <div class="big">VFXLAB</div>
+    <div class="small">Upload an image to begin</div>
+  </div>
+  <div class="status-bar">
+    <span><div class="status-dot" id="sdot"></div> <span id="sstatus">No image</span></span>
+    <span id="sdims" style="margin-left:auto"></span>
+    <span id="seffects">0 effects</span>
+  </div>
+</main>
+
+<!-- RIGHT -->
+<aside class="panel-right">
+  <div class="panel-section">
+    <div class="panel-label">Add Effect</div>
+    <div class="effect-grid" id="effect-grid"></div>
+  </div>
+  <div class="panel-section" id="params-section" style="display:none">
+    <div class="panel-label">
+      <span id="params-title">Parameters</span>
+      <span style="cursor:pointer;color:var(--muted)" id="close-params">✕</span>
+    </div>
+    <div id="params-body"></div>
+    <button class="btn btn-primary" id="btn-apply" style="width:100%;margin-top:8px">Apply Effect</button>
+  </div>
+</aside>
+
+<!-- Paste JSON modal -->
+<div id="paste-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Paste Preset JSON</span>
+      <span id="paste-modal-close" class="modal-x">✕</span>
+    </div>
+    <textarea id="paste-json-input" placeholder='{ "name": "my-preset", "effects": [ ... ] }' spellcheck="false"></textarea>
+    <div id="paste-error" class="paste-error" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="paste-cancel">Cancel</button>
+      <button class="btn btn-primary" id="paste-apply">Apply Preset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video preview modal -->
+<div id="record-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Preview Recording</span>
+      <span id="modal-close" class="modal-x">✕</span>
+    </div>
+    <video id="record-preview" controls loop autoplay muted></video>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-discard">Discard</button>
+      <button class="btn btn-primary" id="modal-download">Download WebM</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
