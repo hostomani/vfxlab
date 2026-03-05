@@ -910,10 +910,11 @@ function createLayer(type){
   const params=def.params.map(p=>({...p}));
   if(def.timed){
     params.unshift(
-      {key:'anim_in',   label:'Fade In (ms)',  type:'range',min:0,max:2000,value:500,step:50,unit:'ms'},
-      {key:'anim_out',  label:'Fade Out (ms)', type:'range',min:0,max:2000,value:400,step:50,unit:'ms'},
-      {key:'trigger_at',label:'Trigger (0→1)', type:'range',min:0,max:1,value:0,step:0.01,unit:''},
-      {key:'exit_at',   label:'Exit (0→1)',    type:'range',min:0,max:1,value:1,step:0.01,unit:''},
+      {key:'anim_in',   label:'Fade In (ms)',  type:'range', min:0,max:2000,value:500,step:50,unit:'ms'},
+      {key:'anim_out',  label:'Fade Out (ms)', type:'range', min:0,max:2000,value:400,step:50,unit:'ms'},
+      {key:'trigger_at',label:'Trigger (0→1)', type:'range', min:0,max:1,value:0,step:0.01,unit:''},
+      {key:'exit_at',   label:'Exit (0→1)',    type:'range', min:0,max:1,value:1,step:0.01,unit:''},
+      {key:'reverse',   label:'Reverse',       type:'toggle',value:false},
     );
   }
   return {type,params,_fired:false};
@@ -932,6 +933,15 @@ function layerAlpha(layer,elapsed,D){
   const fadeIn=animIn>0?easeOut3(clamp((elapsed-trigger)/animIn,0,1)):1;
   const fadeOut=animOut>0?clamp((exitAt-elapsed)/animOut,0,1):1;
   return Math.min(fadeIn,fadeOut);
+}
+
+// Normalized animation progress for a timed layer (0→1, flipped when reverse=true)
+function layerProg(layer,elapsed,D){
+  const p=key=>layer.params.find(pp=>pp.key===key)?.value;
+  const trigger=(p('trigger_at')??0)*D;
+  const animIn=p('anim_in')??500;
+  const raw=clamp((elapsed-trigger)/Math.max(animIn,1),0,1);
+  return p('reverse')?1-raw:raw;
 }
 
 // Render a single layer
@@ -954,8 +964,7 @@ function renderLayer(layer,elapsed,D){
     case 'logo':{
       if(!logoImg)break;
       const lw=p('width'),lh=p('height'),yo=p('y_off'),style=p('style')||0;
-      const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-      const progress=clamp((elapsed-trigger)/animIn,0,1);
+      const progress=layerProg(layer,elapsed,D);
       if(style===2){
         const gi=p('glitch_int')*(1-progress);
         if(progress<1)drawLogoGlitch(W/2,H/2+yo,lw,lh,alpha,gi);
@@ -971,14 +980,12 @@ function renderLayer(layer,elapsed,D){
     case 'title_text':{
       const anim=p('anim')||0,ty=H/2+p('y_off');
       if(anim===2){
-        const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-        const wipe=clamp((elapsed-trigger)/animIn,0,1);
+        const wipe=layerProg(layer,elapsed,D);
         ctx.save();ctx.beginPath();ctx.rect(0,0,W*wipe,H);ctx.clip();
         drawTitle(title(),W/2,ty,p('size'),p('color'),alpha,p('spacing'));
         ctx.restore();
       } else if(anim===1){
-        const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-        const slide=easeOut5(clamp((elapsed-trigger)/animIn,0,1));
+        const slide=easeOut5(layerProg(layer,elapsed,D));
         drawTitle(title(),W/2,lerp(ty+30,ty,slide),p('size'),p('color'),alpha,p('spacing'));
       } else {
         drawTitle(title(),W/2,ty,p('size'),p('color'),alpha,p('spacing'));
@@ -1001,8 +1008,7 @@ function renderLayer(layer,elapsed,D){
     case 'brackets':{
       const expand=p('expand');
       if(expand){
-        const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-        const bp=clamp((elapsed-trigger)/animIn,0,1);
+        const bp=layerProg(layer,elapsed,D);
         const bw=lerp(40,p('width'),easeOutBack(bp));
         drawBrackets(W/2,H/2+p('y_off'),bw,p('height'),alpha,p('color'),p('arm'));
       } else {
@@ -1021,8 +1027,7 @@ function renderLayer(layer,elapsed,D){
 
     case 'letterbox':{
       const h=H*p('height')/100;
-      const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-      const lp=easeOut5(clamp((elapsed-trigger)/animIn,0,1));
+      const lp=easeOut5(layerProg(layer,elapsed,D));
       ctx.fillStyle='#000';
       ctx.fillRect(0,0,W,h*lp);ctx.fillRect(0,H-h*lp,W,h*lp);break;}
 
@@ -1035,8 +1040,7 @@ function renderLayer(layer,elapsed,D){
     case 'retro_sun':{
       const sy=H*p('y_pos')/100,sr=p('size');
       const col=hex2rgb(p('color'));
-      const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-      const sp=easeOut5(clamp((elapsed-trigger)/animIn,0,1));
+      const sp=easeOut5(layerProg(layer,elapsed,D));
       const cr=sr*sp;
       const sg=ctx.createRadialGradient(W/2,sy,0,W/2,sy,cr);
       sg.addColorStop(0,`rgba(${col.r},${col.g},${col.b},0.9)`);
@@ -1291,10 +1295,7 @@ function renderLayer(layer,elapsed,D){
     case 'typewriter':{
       if(alpha<=0)break;
       const src=p('text')||title()||'';
-      const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
-      const charsPerSec=p('speed')||12;
-      const elapsed2=Math.max(0,elapsed-trigger);
-      const charCount=Math.min(Math.floor(elapsed2/1000*charsPerSec),src.length);
+      const charCount=Math.round(layerProg(layer,elapsed,D)*src.length);
       const shown=src.slice(0,charCount);
       const cursor=p('cursor')&&elapsed%(1000/1.2)<600;
       const display=shown+(cursor?'▌':'');
@@ -1307,10 +1308,8 @@ function renderLayer(layer,elapsed,D){
 
     case 'counter':{
       if(alpha<=0)break;
-      const trigger=(p('trigger_at')??0)*D,animIn=p('anim_in')??500;
       const from=p('from')??0,to=p('to')??100;
-      const prog=clamp((elapsed-trigger)/Math.max(animIn,1),0,1);
-      const val=Math.round(lerp(from,to,easeOut3(prog)));
+      const val=Math.round(lerp(from,to,easeOut3(layerProg(layer,elapsed,D))));
       const display=`${p('prefix')||''}${val}${p('suffix')||''}`;
       ctx.save();ctx.globalAlpha=alpha;
       ctx.font=`${p('size')}px 'Bebas Neue',sans-serif`;
@@ -1335,10 +1334,7 @@ function renderLayer(layer,elapsed,D){
       const strokeCol=p('stroke_color')||'#000000';
       const shadowBlur=p('shadow_blur')||0;
       const shadowCol=p('shadow_color')||'#000000';
-      const trigger=(p('trigger_at')??0)*D;
-      const animIn=p('anim_in')??500;
-      const prog=clamp((elapsed-trigger)/Math.max(animIn,1),0,1);
-      const eased=easeOut3(prog);
+      const eased=easeOut3(layerProg(layer,elapsed,D));
       ctx.save();
       ctx.globalAlpha=alpha;
       ctx.font=`${sz}px '${fontName}',sans-serif`;
@@ -1382,10 +1378,9 @@ function renderLayer(layer,elapsed,D){
 
     // ── Transitions ────────────────────────────────────────────────────────
     case 'crt_startup':{
-      const trigger=(p('trigger_at')??0)*D;
-      const animIn=p('anim_in')??800;
-      const prog=clamp((elapsed-trigger)/Math.max(animIn,1),0,1);
-      if(prog>=1)break; // fully open — show nothing
+      const prog=layerProg(layer,elapsed,D);
+      if(!p('reverse')&&prog>=1)break; // normal: fully open — show nothing
+      if(p('reverse')&&prog<=0)break;  // reversed: fully collapsed — show nothing
       const eased=easeOut5(prog);
       // At prog=0: just a bright line. At prog=1: full reveal.
       const minLineH=2;
@@ -1819,7 +1814,7 @@ function buildLayerParams(idx){
   const def=LAYER_DEFS.find(d=>d.type===layer.type);
   document.getElementById('params-label').textContent=`${def.icon} ${def.name}`;
   // Split timing params from visual params
-  const timingKeys=['trigger_at','exit_at','anim_in','anim_out'];
+  const timingKeys=['trigger_at','exit_at','anim_in','anim_out','reverse'];
   const timingParams=layer.params.filter(p=>timingKeys.includes(p.key));
   const visualParams=layer.params.filter(p=>!timingKeys.includes(p.key));
   const allParams=[...timingParams,...visualParams];
@@ -1883,10 +1878,11 @@ importLayersFile.addEventListener('change',()=>{
     // Sanitize: only keep known keys, reset runtime state
     const defs={};LAYER_DEFS.forEach(d=>defs[d.type]=d);
     const TIMED_DEFS=[
-      {key:'anim_in',   label:'Fade In (ms)',  type:'range',min:0,max:2000,value:500,step:50,unit:'ms'},
-      {key:'anim_out',  label:'Fade Out (ms)', type:'range',min:0,max:2000,value:400,step:50,unit:'ms'},
-      {key:'trigger_at',label:'Trigger (0→1)', type:'range',min:0,max:1,value:0,step:0.01,unit:''},
-      {key:'exit_at',   label:'Exit (0→1)',    type:'range',min:0,max:1,value:1,step:0.01,unit:''},
+      {key:'anim_in',   label:'Fade In (ms)',  type:'range', min:0,max:2000,value:500,step:50,unit:'ms'},
+      {key:'anim_out',  label:'Fade Out (ms)', type:'range', min:0,max:2000,value:400,step:50,unit:'ms'},
+      {key:'trigger_at',label:'Trigger (0→1)', type:'range', min:0,max:1,value:0,step:0.01,unit:''},
+      {key:'exit_at',   label:'Exit (0→1)',    type:'range', min:0,max:1,value:1,step:0.01,unit:''},
+      {key:'reverse',   label:'Reverse',       type:'toggle',value:false},
     ];
     customLayers=layers.flatMap(l=>{
       const def=defs[l.type];if(!def)return[];
