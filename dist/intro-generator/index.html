@@ -6,6 +6,15 @@
 <title>VFXLAB — Intro Generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LM7R3CZ61E"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-LM7R3CZ61E');
+</script>
 <style>
 :root {
   --bg:#0a0a0a; --panel:#111113; --border:#1e1e22;
@@ -397,6 +406,7 @@ body.tl-open #timeline-panel{display:flex;}
   </div>
   <div class="controls-bar">
     <button class="btn btn-ghost" id="btn-play">▶ Play</button>
+    <button class="btn btn-ghost" id="btn-pause" disabled>⏸ Pause</button>
     <button class="btn btn-ghost" id="btn-stop" disabled>⏹ Stop</button>
     <div class="progress-wrap"><div id="progress-bar"></div></div>
     <span class="time-label" id="time-label">0.0s</span>
@@ -455,7 +465,7 @@ let logoImg=null, logoChR=null, logoChB=null;
 let accentHex='#e8ff00', accentRGB=hex2rgb('#e8ff00');
 let bgHex='#000000';
 let duration=4, fps=30;
-let rafId=null, startTime=null, isPlaying=false;
+let rafId=null, startTime=null, isPlaying=false, isPaused=false, pausedAt=0;
 
 const title   = () => document.getElementById('inp-title').value   || 'YOUR STUDIO';
 const tagline = () => document.getElementById('inp-tagline').value || 'Est. 2024';
@@ -900,6 +910,38 @@ const LAYER_DEFS = [
       {key:'glow',    label:'Edge Glow',    type:'range', min:0,max:100,value:60,unit:''},
       {key:'flicker', label:'Flicker',      type:'toggle',value:true},
       {key:'color',   label:'Glow Color',   type:'color', value:'#ffffff'},
+    ]},
+  // ── Shake / Trembling ──────────────────────────────────────────────────────
+  { type:'camera_shake', name:'Camera Shake', icon:'📳', timed:true, params:[
+      {key:'intensity', label:'Intensity', type:'range', min:1,max:60, value:15, unit:'px'},
+      {key:'speed',     label:'Speed',     type:'range', min:1,max:10, value:5,  unit:''},
+    ]},
+  // ── Light Effects ──────────────────────────────────────────────────────────
+  { type:'light_rays',   name:'Light Rays',   icon:'✦', timed:true, params:[
+      {key:'x_pos',   label:'Source X %',  type:'range', min:0, max:100, value:50,  unit:'%'},
+      {key:'y_pos',   label:'Source Y %',  type:'range', min:0, max:80,  value:0,   unit:'%'},
+      {key:'count',   label:'Ray Count',   type:'range', min:2, max:20,  value:8,   unit:''},
+      {key:'spread',  label:'Spread °',    type:'range', min:10,max:180, value:70,  unit:'°'},
+      {key:'length',  label:'Length %',    type:'range', min:10,max:150, value:90,  unit:'%'},
+      {key:'width',   label:'Ray Width',   type:'range', min:1, max:80,  value:30,  unit:''},
+      {key:'color',   label:'Color',       type:'color', value:'#ffffff'},
+      {key:'alpha',   label:'Opacity',     type:'range', min:0, max:100, value:40,  unit:''},
+    ]},
+  { type:'spot_light',   name:'Spot Light',   icon:'🔦', timed:true, params:[
+      {key:'radius',  label:'Radius',      type:'range', min:30, max:600, value:200, unit:'px'},
+      {key:'x_from',  label:'X From %',    type:'range', min:-20,max:120, value:-10, unit:'%'},
+      {key:'x_to',    label:'X To %',      type:'range', min:-20,max:120, value:110, unit:'%'},
+      {key:'y_pos',   label:'Y Pos %',     type:'range', min:0,  max:100, value:50,  unit:'%'},
+      {key:'color',   label:'Color',       type:'color', value:'#ffffff'},
+      {key:'intensity',label:'Intensity',  type:'range', min:0,  max:100, value:60,  unit:''},
+      {key:'sweep',   label:'Auto Sweep',  type:'toggle',value:true},
+    ]},
+  { type:'lens_flare',   name:'Lens Flare',   icon:'◎', timed:true, params:[
+      {key:'x_pos',   label:'Source X %',  type:'range', min:0, max:100, value:20, unit:'%'},
+      {key:'y_pos',   label:'Source Y %',  type:'range', min:0, max:100, value:20, unit:'%'},
+      {key:'scale',   label:'Scale',       type:'range', min:1, max:300, value:100,unit:'%'},
+      {key:'color',   label:'Color',       type:'color', value:'#ffffff'},
+      {key:'intensity',label:'Intensity',  type:'range', min:0, max:100, value:70, unit:''},
     ]},
 ];
 
@@ -1376,6 +1418,104 @@ function renderLayer(layer,elapsed,D){
       ctx.restore();
       ctx.restore();break;}
 
+    // ── Shake ──────────────────────────────────────────────────────────────
+    case 'camera_shake':{
+      if(alpha<=0)break;
+      const intensity=p('intensity')||15;
+      const speed=(p('speed')||5)*0.05;
+      // Deterministic per-frame jitter using elapsed as seed (changes every frame)
+      const t=elapsed*speed;
+      const sx=(Math.sin(t*7.3+1.1)*0.5+Math.sin(t*13.1+2.7)*0.5)*intensity*alpha;
+      const sy=(Math.sin(t*5.9+0.4)*0.5+Math.sin(t*11.7+3.9)*0.5)*intensity*alpha;
+      ctx.translate(sx,sy);
+      break;}
+
+    // ── Light Effects ──────────────────────────────────────────────────────
+    case 'light_rays':{
+      if(alpha<=0)break;
+      const srcX=W*p('x_pos')/100;
+      const srcY=H*p('y_pos')/100;
+      const count=Math.round(p('count')||8);
+      const spreadRad=(p('spread')||70)*Math.PI/180;
+      const len=Math.max(W,H)*(p('length')||90)/100;
+      const rayW=(p('width')||30);
+      const col=hex2rgb(p('color')||'#ffffff');
+      const a=alpha*(p('alpha')||40)/100*0.4;
+      ctx.save();
+      // Base angle points downward from source
+      const baseAngle=Math.PI/2;
+      for(let i=0;i<count;i++){
+        const t=count===1?0:(i/(count-1)-0.5);
+        const angle=baseAngle+t*spreadRad;
+        const ex=srcX+Math.cos(angle)*len;
+        const ey=srcY+Math.sin(angle)*len;
+        const halfW=rayW*(0.5+Math.random()*0.5);
+        const px=-Math.sin(angle)*halfW;
+        const py=Math.cos(angle)*halfW;
+        const grad=ctx.createLinearGradient(srcX,srcY,ex,ey);
+        grad.addColorStop(0,`rgba(${col.r},${col.g},${col.b},${a})`);
+        grad.addColorStop(1,`rgba(${col.r},${col.g},${col.b},0)`);
+        ctx.beginPath();
+        ctx.moveTo(srcX,srcY);
+        ctx.lineTo(ex+px,ey+py);
+        ctx.lineTo(ex-px,ey-py);
+        ctx.closePath();
+        ctx.fillStyle=grad;
+        ctx.fill();
+      }
+      ctx.restore();break;}
+
+    case 'spot_light':{
+      if(alpha<=0)break;
+      const radius=p('radius')||200;
+      const yPos=H*p('y_pos')/100;
+      const xFrom=W*p('x_from')/100;
+      const xTo=W*p('x_to')/100;
+      const col=hex2rgb(p('color')||'#ffffff');
+      const intensity=alpha*(p('intensity')||60)/100;
+      // Position: if sweep, lerp using layerProg; otherwise center
+      const prog=p('sweep')?layerProg(layer,elapsed,D):0.5;
+      const cx=lerp(xFrom,xTo,prog);
+      ctx.save();
+      const grad=ctx.createRadialGradient(cx,yPos,0,cx,yPos,radius);
+      grad.addColorStop(0,`rgba(${col.r},${col.g},${col.b},${intensity})`);
+      grad.addColorStop(0.4,`rgba(${col.r},${col.g},${col.b},${intensity*0.4})`);
+      grad.addColorStop(1,`rgba(${col.r},${col.g},${col.b},0)`);
+      ctx.fillStyle=grad;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();break;}
+
+    case 'lens_flare':{
+      if(alpha<=0)break;
+      const fx=W*p('x_pos')/100;
+      const fy=H*p('y_pos')/100;
+      const scale=(p('scale')||100)/100;
+      const col=hex2rgb(p('color')||'#ffffff');
+      const intensity=alpha*(p('intensity')||70)/100;
+      ctx.save();
+      // Main glow
+      const g0=ctx.createRadialGradient(fx,fy,0,fx,fy,120*scale);
+      g0.addColorStop(0,`rgba(${col.r},${col.g},${col.b},${intensity})`);
+      g0.addColorStop(0.15,`rgba(${col.r},${col.g},${col.b},${intensity*0.5})`);
+      g0.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g0;ctx.fillRect(0,0,W,H);
+      // Anamorphic streak
+      ctx.globalAlpha=intensity*0.5;
+      const sg=ctx.createLinearGradient(fx-300*scale,fy,fx+300*scale,fy);
+      sg.addColorStop(0,'rgba(0,0,0,0)');sg.addColorStop(0.5,`rgba(${col.r},${col.g},${col.b},1)`);sg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sg;ctx.fillRect(fx-300*scale,fy-3*scale,600*scale,6*scale);
+      // Secondary artifacts along axis toward center
+      const ax=W/2-fx, ay=H/2-fy;
+      [[0.3,40],[0.5,25],[0.7,60],[0.9,15],[1.1,35]].forEach(([t,r])=>{
+        const ox=fx+ax*t, oy=fy+ay*t, rs=r*scale;
+        const rg=ctx.createRadialGradient(ox,oy,0,ox,oy,rs);
+        rg.addColorStop(0,`rgba(${col.r},${col.g},${col.b},${intensity*0.6})`);
+        rg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.globalAlpha=intensity*0.4;ctx.fillStyle=rg;
+        ctx.beginPath();ctx.arc(ox,oy,rs,0,Math.PI*2);ctx.fill();
+      });
+      ctx.restore();break;}
+
     // ── Transitions ────────────────────────────────────────────────────────
     case 'crt_startup':{
       const prog=layerProg(layer,elapsed,D);
@@ -1429,7 +1569,8 @@ function renderLayer(layer,elapsed,D){
 // Render all custom layers in order
 function renderCustom(elapsed){
   const D=duration*1000;
-  ctx.clearRect(0,0,W,H); // always clear before painting layers
+  ctx.setTransform(1,0,0,1,0,0); // reset any camera_shake transform from previous frame
+  ctx.clearRect(0,0,W,H);
   ctx.fillStyle=bgHex;ctx.fillRect(0,0,W,H);
   if(customLayers.length===0){
     ctx.save();ctx.globalAlpha=0.15;ctx.font=`14px 'DM Mono',monospace`;ctx.fillStyle=accentHex;
@@ -1677,7 +1818,7 @@ allTpls.forEach(tpl => {
     } else {
       buildTemplateParams(tpl);
     }
-    if(!isPlaying)renderFrame(0);
+    renderPreview();
   });
   tplGrid.appendChild(card);
 });
@@ -1707,14 +1848,14 @@ function buildLayerList(){
       if(dragSrcIdx===null||dragSrcIdx===idx)return;
       const moved=customLayers.splice(dragSrcIdx,1)[0];customLayers.splice(idx,0,moved);
       if(selectedLayerIdx===dragSrcIdx)selectedLayerIdx=idx;
-      buildLayerList();buildTimeline();if(!isPlaying)renderFrame(0);
+      buildLayerList();buildTimeline();renderPreview();
     });
     chip.querySelector('.chip-remove').addEventListener('click',()=>{
       customLayers.splice(idx,1);
       if(selectedLayerIdx>=customLayers.length)selectedLayerIdx=customLayers.length-1;
       buildLayerList();buildTimeline();
       if(selectedLayerIdx>=0)buildLayerParams(selectedLayerIdx);else showParamsHint();
-      if(!isPlaying)renderFrame(0);
+      renderPreview();
     });
     list.appendChild(chip);
   });
@@ -1727,7 +1868,7 @@ function addLayer(type){
   buildLayerList();buildTimeline();buildLayerParams(selectedLayerIdx);
   document.getElementById('layer-picker').style.display='none';
   document.getElementById('btn-toggle-picker').textContent='+ Add Layer';
-  if(!isPlaying)renderFrame(0);
+  renderPreview();
 }
 
 // Build layer type picker
@@ -1818,12 +1959,12 @@ function buildLayerParams(idx){
   const timingParams=layer.params.filter(p=>timingKeys.includes(p.key));
   const visualParams=layer.params.filter(p=>!timingKeys.includes(p.key));
   const allParams=[...timingParams,...visualParams];
-  buildParamsBody(allParams,()=>{buildTimeline();if(!isPlaying)renderFrame(0);});
+  buildParamsBody(allParams,()=>{buildTimeline();renderPreview();});
 }
 
 function buildTemplateParams(tpl){
   document.getElementById('params-label').textContent=`${tpl.icon} ${tpl.name}`;
-  buildParamsBody(tpl.params,()=>{if(!isPlaying)renderFrame(0);});
+  buildParamsBody(tpl.params,()=>{renderPreview();});
 }
 
 // Init params for first template
@@ -1839,7 +1980,7 @@ function refreshSavedList(){
     chip.innerHTML=`<span>${s.name}</span><span class="saved-tpl-del" data-name="${s.name}">✕</span>`;
     chip.querySelector('span:first-child').addEventListener('click',()=>{
       customLayers=s.layers.map(l=>({...l,params:l.params.map(p=>({...p})),_fired:false}));
-      selectedLayerIdx=-1;buildLayerList();buildTimeline();showParamsHint();if(!isPlaying)renderFrame(0);
+      selectedLayerIdx=-1;buildLayerList();buildTimeline();showParamsHint();renderPreview();
     });
     chip.querySelector('.saved-tpl-del').addEventListener('click',e=>{
       e.stopPropagation();const arr=getSavedCustom().filter(t=>t.name!==s.name);saveCustomTemplates(arr);refreshSavedList();
@@ -1899,7 +2040,7 @@ importLayersFile.addEventListener('change',()=>{
       return[{...l,params,_fired:false}];
     });
     selectedLayerIdx=-1;buildLayerList();buildTimeline();showParamsHint();
-    if(!isPlaying)renderFrame(0);
+    renderPreview();
   };
   reader.readAsText(f);
 });
@@ -2055,39 +2196,48 @@ function renderFrame(elapsed){
 
 // ─── Playback ─────────────────────────────────────────────────────────────────
 const btnPlay=document.getElementById('btn-play');
+const btnPause=document.getElementById('btn-pause');
 const btnStop=document.getElementById('btn-stop');
 const progressBar=document.getElementById('progress-bar');
 const timeLabel=document.getElementById('time-label');
 
+function setPlaybackBtns({playing,paused}){
+  btnPlay.disabled=playing&&!paused;
+  btnPause.disabled=!playing;
+  btnPause.textContent=paused?'▶ Resume':'⏸ Pause';
+  btnStop.disabled=!playing&&!paused;
+  document.getElementById('btn-record').disabled=playing||paused;
+}
+
+// Render at current scrub position (paused frame) or frame 0 if not paused
+function renderPreview(){if(!isPlaying)renderFrame(isPaused?pausedAt:0);}
+
 function stopPlayback(){
   if(rafId){cancelAnimationFrame(rafId);rafId=null;}
-  isPlaying=false;btnPlay.disabled=false;btnStop.disabled=true;
-  document.getElementById('btn-record').disabled=false;
+  isPlaying=false;isPaused=false;pausedAt=0;
+  setPlaybackBtns({playing:false,paused:false});
   renderFrame(0);progressBar.style.width='0%';timeLabel.textContent='0.0s';
 }
 
-function startPlayback(onEnd){
-  particles=[];rings=[];rainDrops=[];dataStreams=[];events=[];
-  if(activeTpl===CUSTOM_TPL){
-    customLayers.forEach(l=>{l._fired=false;l._state=null;});
-    // preload fonts for custom_text layers
-    customLayers.forEach(l=>{
-      if(l.type==='custom_text'){const f=l.params.find(p=>p.key==='font')?.value;if(f)ensureFont(f);}
-    });
-    // init stateful layer types
-    customLayers.forEach(l=>{
-      if(l.type==='data_streams')initDataStreams(Math.round(l.params.find(p=>p.key==='count')?.value??20));
-      if(l.type==='rain')initRain(Math.round(l.params.find(p=>p.key==='count')?.value??80));
-    });
-  } else {
-    activeTpl.initPlayback?.();
-  }
-  startTime=performance.now();isPlaying=true;
-  btnPlay.disabled=true;btnStop.disabled=false;
-  document.getElementById('btn-record').disabled=true;
+function pausePlayback(){
+  if(!isPlaying||isPaused)return;
+  if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+  isPaused=true;isPlaying=false;
+  setPlaybackBtns({playing:true,paused:true});
+}
 
+function resumePlayback(onEnd){
+  if(!isPaused)return;
+  isPaused=false;isPlaying=true;
+  startTime=performance.now()-pausedAt;
+  setPlaybackBtns({playing:true,paused:false});
+  runLoop(onEnd);
+}
+
+function runLoop(onEnd){
   function loop(now){
     const elapsed=now-startTime,D=duration*1000;
+    pausedAt=elapsed;
     renderFrame(elapsed);
     progressBar.style.width=`${Math.min(elapsed/D*100,100)}%`;
     timeLabel.textContent=`${(elapsed/1000).toFixed(1)}s`;
@@ -2098,7 +2248,28 @@ function startPlayback(onEnd){
   rafId=requestAnimationFrame(loop);
 }
 
+function startPlayback(onEnd){
+  particles=[];rings=[];rainDrops=[];dataStreams=[];events=[];
+  pausedAt=0;
+  if(activeTpl===CUSTOM_TPL){
+    customLayers.forEach(l=>{l._fired=false;l._state=null;});
+    customLayers.forEach(l=>{
+      if(l.type==='custom_text'){const f=l.params.find(p=>p.key==='font')?.value;if(f)ensureFont(f);}
+    });
+    customLayers.forEach(l=>{
+      if(l.type==='data_streams')initDataStreams(Math.round(l.params.find(p=>p.key==='count')?.value??20));
+      if(l.type==='rain')initRain(Math.round(l.params.find(p=>p.key==='count')?.value??80));
+    });
+  } else {
+    activeTpl.initPlayback?.();
+  }
+  startTime=performance.now();isPlaying=true;isPaused=false;
+  setPlaybackBtns({playing:true,paused:false});
+  runLoop(onEnd);
+}
+
 btnPlay.addEventListener('click',()=>startPlayback());
+btnPause.addEventListener('click',()=>{if(isPaused)resumePlayback();else pausePlayback();});
 btnStop.addEventListener('click',stopPlayback);
 
 // ─── Recording ────────────────────────────────────────────────────────────────
@@ -2110,7 +2281,7 @@ document.getElementById('btn-record').addEventListener('click',()=>{
     const blob=new Blob(chunks,{type:'video/webm'}),blobUrl=URL.createObjectURL(blob);
     const modal=document.getElementById('record-modal'),videoEl=document.getElementById('record-preview');
     videoEl.src=blobUrl;modal.style.display='flex';
-    btnPlay.disabled=false;btnStop.disabled=true;
+    setPlaybackBtns({playing:false,paused:false});
     document.getElementById('btn-record').disabled=false;document.getElementById('btn-record').textContent='⏺ Record';
     progressBar.style.width='0%';timeLabel.textContent='0.0s';
     document.getElementById('modal-download').onclick=()=>{const a=document.createElement('a');a.download='vfxlab-intro.webm';a.href=blobUrl;a.click();closeModal(blobUrl,videoEl,modal);};
@@ -2118,7 +2289,7 @@ document.getElementById('btn-record').addEventListener('click',()=>{
     document.getElementById('modal-close').onclick=()=>closeModal(blobUrl,videoEl,modal);
     modal.onclick=e=>{if(e.target===modal)closeModal(blobUrl,videoEl,modal);};
   };
-  const btnRec=document.getElementById('btn-record');btnRec.disabled=true;btnPlay.disabled=true;btnRec.textContent='⏺ …';
+  const btnRec=document.getElementById('btn-record');btnRec.disabled=true;btnPause.disabled=true;btnPlay.disabled=true;btnRec.textContent='⏺ …';
   recorder.start();startPlayback(()=>recorder.stop());
 });
 function closeModal(blobUrl,videoEl,modal){modal.style.display='none';videoEl.src='';URL.revokeObjectURL(blobUrl);}
@@ -2157,16 +2328,16 @@ function loadLogo(file){
     logoImg=img;logoThumb.src=url;logoThumb.style.display='block';
     buildLogoChannels();
     autoSetLogoDims(img.naturalWidth||512,img.naturalHeight||512);
-    if(!isPlaying)renderFrame(0);
+    renderPreview();
   };
   img.src=url;
 }
 
 // ─── Global controls ──────────────────────────────────────────────────────────
-document.getElementById('inp-bg').addEventListener('input',e=>{bgHex=e.target.value;document.getElementById('bg-hex').textContent=bgHex;if(!isPlaying)renderFrame(0);});
-document.getElementById('inp-color').addEventListener('input',e=>{accentHex=e.target.value;accentRGB=hex2rgb(accentHex);document.getElementById('color-hex').textContent=accentHex;if(!isPlaying)renderFrame(0);});
-document.getElementById('inp-title').addEventListener('input',()=>{if(!isPlaying)renderFrame(0);});
-document.getElementById('inp-tagline').addEventListener('input',()=>{if(!isPlaying)renderFrame(0);});
+document.getElementById('inp-bg').addEventListener('input',e=>{bgHex=e.target.value;document.getElementById('bg-hex').textContent=bgHex;renderPreview();});
+document.getElementById('inp-color').addEventListener('input',e=>{accentHex=e.target.value;accentRGB=hex2rgb(accentHex);document.getElementById('color-hex').textContent=accentHex;renderPreview();});
+document.getElementById('inp-title').addEventListener('input',()=>{renderPreview();});
+document.getElementById('inp-tagline').addEventListener('input',()=>{renderPreview();});
 const slDur=document.getElementById('sl-duration'),valDur=document.getElementById('val-duration');
 slDur.addEventListener('input',()=>{duration=parseFloat(slDur.value);valDur.textContent=`${duration}s`;});
 const slFps=document.getElementById('sl-fps'),valFps=document.getElementById('val-fps');
