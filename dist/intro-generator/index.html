@@ -6,6 +6,8 @@
 <title>VFXLAB — Intro Generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Google AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3376762627230111" crossorigin="anonymous"></script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-LM7R3CZ61E"></script>
 <script>
@@ -48,7 +50,13 @@ header .sub{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:
 
 .panel-left{
   border-right:1px solid var(--border);background:var(--panel);
-  overflow-y:auto;display:flex;flex-direction:column;
+  overflow:hidden;display:flex;flex-direction:column;
+}
+.panel-scroll{flex:1;overflow-y:auto;}
+.ad-slot{
+  flex-shrink:0;display:flex;justify-content:center;align-items:center;
+  border-top:1px solid var(--border);background:var(--panel);
+  padding:8px 0;min-height:90px;
 }
 .panel-section{padding:14px 16px;border-bottom:1px solid var(--border);}
 .panel-label{
@@ -314,6 +322,7 @@ body.tl-open #timeline-panel{display:flex;}
 </header>
 
 <aside class="panel-left">
+<div class="panel-scroll">
   <!-- Logo -->
   <div class="panel-section">
     <div class="panel-label">Logo / Image</div>
@@ -398,6 +407,17 @@ body.tl-open #timeline-panel{display:flex;}
       <span class="param-val" id="val-fps">30</span>
     </div>
   </div>
+</div><!-- /.panel-scroll -->
+
+<!-- SIDEBAR AD — create a Display ad unit in AdSense → Ads → By ad unit,
+     paste the data-ad-slot value below (replace 0000000000) -->
+<div class="ad-slot">
+  <ins class="adsbygoogle"
+       style="display:inline-block;width:300px;height:250px"
+       data-ad-client="ca-pub-3376762627230111"
+       data-ad-slot="0000000000"></ins>
+  <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+</div>
 </aside>
 
 <main class="panel-center">
@@ -439,6 +459,15 @@ body.tl-open #timeline-panel{display:flex;}
       <span id="modal-close" class="modal-x">✕</span>
     </div>
     <video id="record-preview" controls loop autoplay muted></video>
+    <!-- MODAL AD — create a second Display ad unit in AdSense,
+         paste the data-ad-slot value below (replace 1111111111) -->
+    <div class="ad-slot" style="border-top:none;border-bottom:1px solid var(--border);">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-3376762627230111"
+           data-ad-slot="1111111111"></ins>
+      <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="modal-discard">Discard</button>
       <button class="btn btn-primary" id="modal-download">Download WebM</button>
