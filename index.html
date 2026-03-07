@@ -2668,7 +2668,21 @@ document.getElementById('inp-color').addEventListener('input',e=>{accentHex=e.ta
 document.getElementById('inp-title').addEventListener('input',()=>{renderPreview();});
 document.getElementById('inp-tagline').addEventListener('input',()=>{renderPreview();});
 const slDur=document.getElementById('sl-duration'),valDur=document.getElementById('val-duration');
-slDur.addEventListener('input',()=>{const v=parseFloat(slDur.value);if(v>0){duration=v;valDur.textContent=fmtTime(duration);}});
+slDur.addEventListener('input',()=>{
+  const v=parseFloat(slDur.value);if(!(v>0))return;
+  const ratio=duration/v;
+  customLayers.forEach(layer=>{
+    const trig=layer.params.find(p=>p.key==='trigger_at');
+    const exit=layer.params.find(p=>p.key==='exit_at');
+    if(trig)trig.value=clamp(trig.value*ratio,0,0.999);
+    if(exit)exit.value=clamp(exit.value*ratio,0,1);
+    if(trig&&exit&&exit.value<=trig.value)exit.value=Math.min(trig.value+0.001,1);
+  });
+  duration=v;
+  valDur.textContent=fmtTime(duration);
+  buildTimeline();
+  if(selectedLayerIdx>=0)buildLayerParams(selectedLayerIdx);
+});
 const slFps=document.getElementById('sl-fps'),valFps=document.getElementById('val-fps');
 slFps.addEventListener('input',()=>{fps=parseInt(slFps.value);valFps.textContent=fps;});
 
